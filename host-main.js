@@ -53,7 +53,7 @@ async function run() {
 
   // 创建沙箱 & 运行 script
   const sandbox = await createSandbox(app)
-  const scriptElement = sandbox.pureCreateElement("script")
+  const scriptElement = sandbox.window.document.createElement("script")
   scriptElement.setAttribute("type", "module")
   scriptElement.src = "http://localhost:5174" + script.getAttribute("src")
   sandbox.microBody.appendChild(scriptElement)
@@ -71,27 +71,22 @@ async function createSandbox(app) {
         microHead: iframe.contentWindow.document.head,
         microBody: iframe.contentWindow.document.body,
         window: iframe.contentWindow,
-        // 3. pure 是相对于「会把 DOM 挂载到主应用」行为来说的
-        pureCreateElement: (tag) => {
-          const node = iframe.contentWindow.document.createElement(tag)
-          node.__pure = true
-          return node
-        },
       }
 
       // 1. 重写 createElement，将 DOM 创建到主应用中
       iframe.contentWindow.Document.prototype.createElement =
         Document.prototype.createElement
 
-      // 2. script 仍需创建到 iframe 中，所以一个开关：__pure
-      const rawAppendChild = sandbox.microBody.appendChild
-      Object.defineProperty(sandbox.microBody, "appendChild", {
-        get() {
-          function appendChild(node) {
-            if (!node.__pure) {
-              return app.tinyMicroBody.appendChild(node)
+        const rawAppendChild = sandbox.microBody.appendChild
+        Object.defineProperty(sandbox.microBody, "appendChild", {
+          get() {
+            function appendChild(node) {
+            // 2. script 仍需创建到 iframe 中
+            // getHijackParent
+            if (node.tagName === "SCRIPT") {
+              return rawAppendChild.call(sandbox.microBody, node)
             }
-            return rawAppendChild.call(sandbox.microBody, node)
+            return rawAppendChild.call(app.tinyMicroBody, node)
           }
           return appendChild
         },
